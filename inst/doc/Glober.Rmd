@@ -1,0 +1,260 @@
+---
+title: "glober package"
+author: "Mary E. Savino"
+date: " "
+output: pdf_document
+vignette: >
+ %\VignetteEngine{knitr::knitr}
+ %\VignetteIndexEntry{glober package}
+ %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,warning = FALSE)
+library(glober)
+library(genlasso)
+library(fda)
+library(ggplot2)
+library(plot3D)
+```
+
+# Introduction
+
+The package \textsf{glober} provides two tools to estimate the function $f$ in the following nonparametric regression model:
+\begin{equation} \label{eq:model}
+Y_i = f(x_i) + \varepsilon_i, \quad 1 \leq i \leq n,
+\end{equation} 
+where the $\varepsilon_i$ are i.i.d centered random variables of variance $\sigma^2$, the $x_i$ are observation points which belong to a compact set $S$ of $\mathbb{R}^d$, $d=1$ or 2 and $n$ is the total number of observations. 
+This estimation is performed using the GLOBER approach described in [1].
+This method consists in estimating $f$ by approximating it with a linear combination of B-splines, where their knots are selected adaptively using the Generalized Lasso proposed by [2], since they can be seen as changes in the derivatives of the function to estimate. We refer the reader to [1] for further details.
+
+# Estimation of $f$ in the one-dimensional case ($d=1$)
+In the following, we apply our method to a function of one input variable $f_1$. This function is defined as a linear combination of quadratic B-splines with the set of knots $\mathbf{t} = (0.1, 0.27,0.745)$ and $\sigma = 0.1$ in \eqref{eq:model}. 
+
+
+## Description of the dataset
+
+We load the dataset of observations with $n=70$ provided within the package 
+$(x_1, \ldots, x_{70})$:
+```{r observations1D}
+## --- Loading the values of the input variable --- ##
+data('x_1D')
+```
+
+and $(Y_1, \ldots, Y_{70})$:
+```{r y1D}
+## --- Loading the corresponding noisy values of the response variable --- ##
+data('y_1D')
+```
+
+We load the dataset containing the values of the input variable $\{x_1, \ldots, x_N\}$ for which an estimation of $f_1$ is sought. They correspond to the observation points as well as additional points where $f_1$ has not been observed. Here, $N = 201$.
+In order to have a better idea of the underlying function $f_1$, we load the corresponding evaluations of $f_1$ at these input values. 
+```{r xpred_1D}
+## --- Loading the values of the input variable for which an estimation 
+## of f_1 is required --- ##
+data('xpred_1D')
+## --- Loading the corresponding evaluations to plot the function --- ##
+data('f_1D')
+```
+
+We can visualize it for 201 input values by using the $\texttt{ggplot2}$ package:
+```{r}
+## -- Building dataframes to plot -- ##
+data_1D = data.frame(x = xpred_1D, f = f_1D)
+obs_1D = data.frame(x = x_1D, y = y_1D)
+real.knots = c(0.1, 0.27,0.745)
+```
+
+
+```{r, echo=FALSE, out.width="50%", fig.align = 'center'}
+ggplot(data_1D, aes(x, f)) +
+  geom_line(color = 'red') +
+  geom_point(aes(x, y), data =obs_1D, shape= 4, color = "blue", size = 4)+
+  geom_vline(xintercept = real.knots, linetype = 'dashed', color = 'grey27') +
+  xlab('x') +
+  ylab('y') +
+  theme_bw()+
+  theme(axis.title.x = element_text(size=20), axis.title.y = element_text(size =20),
+        axis.text.x = element_text(size=19),
+        axis.text.y = element_text(size=19))
+```
+
+
+The vertical dashed lines represent the real knots $\mathbf{t}$ implied in the definition of $f_1$, the red curve describes the true underlying function $f_1$ to estimate and the blue crosses are the observation points.
+
+## Application of $\texttt{glober.1d}$ to estimate $f_1$
+The $\texttt{glober.1d}$ function of the $\texttt{glober}$ package is applied by using the following arguments: the input values $(x_i)_{1 \leq i \leq n}$ ($\texttt{x}$), the corresponding $(Y_i)_{1 \leq i \leq n}$ ($\texttt{y}$), $N$ input values $\{x_1, \ldots, x_N\}$ for which $f_1$ has to be estimated ($\texttt{xpred}$) and the order of the B-spline basis used to estimate $f_1$ ($\texttt{ord}$).
+```{r}
+res = glober.1d(x = x_1D, y = y_1D, xpred = xpred_1D, ord = 3, parallel = FALSE)
+```
+
+Additional arguments can also be used in this function:
+
+* $\texttt{parallel}$: Logical, if set to TRUE then a parallelized version of the code is used. The default value is FALSE. 
+* $\texttt{nb.Cores}$: Numerical, it represents the number of cores used for parallelization, if parallel is set to TRUE.
+
+The resulting outputs are the following: 
+
+* $\texttt{festimated}$: the estimated values of $f_1$.
+* $\texttt{knotSelec}$: the selected knots used in the definition of the B-splines of the GLOBER estimator.
+* $\texttt{rss}$: Residual sum-of-squares (RSS) of the model defined as: $\sum_{k=1}^n (Y_i - \widehat{f_1}(x_i))^2$, where $\widehat{f_1}$ is the estimator of $f_1$.
+* $\texttt{rsq}$: R-squared of the model, calculated as $1 - RSS/TSS$ where TSS is the total sum-of-squares of the model defined as  $\sum_{k=1}^n (Y_i - \bar{Y})^2$ with $\bar{Y} = (\sum_{i=1}^n Y_i)/n$.
+
+Thus, we can print the estimated values corresponding to the input values $\{x_1, \ldots, x_N\}$:
+```{r}
+fhat = res$festimated
+head(fhat)
+```
+
+The value of the Residual Sum-of-square:
+```{r}
+res$rss
+```
+
+The value of the R-squared:
+```{r}
+res$rsq
+```
+
+
+We can get the set of the estimated knots $\mathbf{\widehat{t}}$: 
+```{r}
+knots.set = res$Selected.knots
+print(knots.set)
+```
+
+
+Finally, we can display the estimation of $f_1$ by using the $\texttt{ggplot2}$ package:
+
+```{r, out.width="50%", fig.align = 'center'}
+## Dataframe of selected knots ##
+idknots = which(xpred_1D %in% knots.set)
+yknots = f_1D[idknots]
+data_knots = data.frame(x.knots = knots.set, y.knots = yknots)
+## Dataframe of the estimation ##
+data_res = data.frame(xpred = xpred_1D, fhat = fhat)
+
+plot_1D = ggplot(data_1D, aes(xpred_1D, f_1D)) +
+    geom_line(color = 'red') +
+    geom_line(data = data_1D, aes(x = xpred_1D, y = fhat), color = "black") +
+    geom_vline(xintercept = real.knots, linetype = 'dashed', color = 'grey27') +
+    geom_point(aes(x, y), data = obs_1D, shape = 4, color = "blue", size = 4)+
+    geom_point(aes(x.knots, y.knots), data = data_knots, shape = 19, color = "blue", 
+               size = 4)+
+    xlab('x') +
+    ylab('y') +
+    theme_bw()+
+    theme(axis.title.x = element_text(size = 20), axis.title.y = element_text(size = 20),
+          axis.text.x = element_text(size = 19),
+          axis.text.y = element_text(size = 19))
+plot_1D
+```
+
+
+The vertical dashed lines represent the real knots $\mathbf{t}$ implied in the definition of $f_1$, the red curve describes the true underlying function $f_1$ to estimate, the black curve corresponds to the estimation with GLOBER, the blue crosses are the observation points and the blue bullets are the observation points chosen as estimated knots $\widehat{t}$.
+
+
+# Estimation of $f$ in the two-dimensional case ($d=2$)
+
+In the following, we apply our method to a function of two input variables $f_2$. This function is defined as a linear combination of tensor products of quadratic univariate B-splines with the sets of knots $\mathbf{t}_1 = (0.24, 0.545)$ and $\mathbf{t}_2 = (0.395, 0.645)$ and $\sigma = 0.01$ in \eqref{eq:model}. 
+
+
+## Description of the dataset
+We load the dataset of observations with $n=100$, provided within the package
+$(x_1, \ldots, x_{100})$  
+```{r}
+## --- Loading the values of the input variables --- ##
+data('x_2D')
+head(x_2D)
+```
+
+and $(Y_1, \ldots, Y_{100})$:
+
+```{r}
+## --- Loading the corresponding noisy values of the response variable --- ##
+data('y_2D')
+```
+
+We load the dataset containing the values of the input variables $\{x_1, \ldots, x_N\}$ for which an estimation of $f_2$ is sought. They correspond to the observation points as well as additional points where $f_2$ has not been observed. Here, $N = 10000$.
+In order to have a better idea of the underlying function $f_2$, we load the corresponding evaluations of $f_2$ at these input values. 
+
+```{r xpred_2D}
+## --- Loading the values of the input variables for which an estimation 
+## of f_2 is required --- ##
+data('xpred_2D')
+head(xpred_2D)
+## --- Loading the corresponding evaluations to plot the function --- ##
+data('f_2D')
+```
+
+We can visualize it for 10000 input values by using the $\texttt{plot3D}$ package:
+```{r, message=FALSE, fig.align = 'center',echo=FALSE, out.width="60%", out.height="60%" }
+scatter3D(xpred_2D[,1], xpred_2D[,2], f_2D, bty = "g", pch = 18, col = gg.col(100),
+          theta = 180, phi = 10)
+```
+
+## Application of $\texttt{glober.2d}$ to estimate $f_2$
+The $\texttt{glober.2d}$ function of the $\texttt{glober}$ package is applied by using the following arguments: the input values $(x_i)_{1 \leq i \leq n}$ ($\texttt{x}$), the corresponding $(Y_i)_{1 \leq i \leq n}$ ($\texttt{y}$), $N$ input values $\{x_1, \ldots, x_N\}$ for which $f_2$ has to be estimated ($\texttt{xpred}$) and the order of the B-spline basis used to estimate $f_2$ ($\texttt{ord}$).
+
+```{r}
+res = glober.2d(x = x_2D, y = y_2D, xpred = xpred_2D, ord = 3, parallel = FALSE)
+```
+
+Additional arguments can also be used in this function:
+
+* $\texttt{parallel}$: Logical, if TRUE then a parallelized version of the code is used. Default is FALSE. 
+* $\texttt{nb.Cores}$: Numerical, it corresponds to the number of cores used for parallelization, if parallel is set to TRUE.
+
+Outputs:
+
+* $\texttt{festimated}$: the estimated values of $f_2$.
+* $\texttt{knotSelec}$: the selected knots used in the definition of the B-splines of the GLOBER estimator.
+* $\texttt{rss}$: Residual sum-of-squares (RSS) of the model defined as: $\sum_{k=1}^n (Y_i - \widehat{f_2}(x_i))^2$, where $\widehat{f_2}$ is the estimator of $f_2$. 
+* $\texttt{rsq}$: R-squared of the model, calculated as $1 - RSS/TSS$ where TSS is the total sum-of-squares of the model defined as  $\sum_{k=1}^n (Y_i - \bar{Y})^2$.
+
+Thus, we can print the estimated values corresponding to the input values $\{x_1, \ldots, x_N\}$:
+```{r}
+fhat_2D = res$festimated
+head(fhat_2D)
+```
+
+The value of the Residual Sum-of-square:
+```{r}
+res$rss
+```
+
+The value of the R-squared:
+```{r}
+res$rsq
+```
+
+We can get the set of estimated knots for each dimension $\mathbf{\widehat{t}_1}$ and $\mathbf{\widehat{t}_2}$: 
+```{r}
+knots.set = res$Selected.knots
+print('For the first dimension:')
+print(knots.set[[1]])
+print('For the second dimension:')
+print(knots.set[[2]])
+```
+
+As for $f_1$, we can visualize the corresponding estimation of $f_2$:
+
+```{r, fig.align = 'center', out.width="40%", out.height="40%"}
+scatter3D(xpred_2D[,1], xpred_2D[,2], f_2D, bty = "g", pch = 18, col = 'red',
+          theta = 180, phi = 10)
+```
+
+```{r, fig.align = 'center', out.width="40%", out.height="40%"}
+
+scatter3D(xpred_2D[,1], xpred_2D[,2], fhat_2D, bty = "g", pch = 18, col = 'forestgreen',
+          theta = 180, phi = 10)
+```
+
+The red surface describes the true underlying function $f_2$ to estimate and the green surface corresponds to the estimation with GLOBER.
+
+
+**References**
+
+[1] Savino, M. E. and Lévy-Leduc, C. A novel approach for estimating functions in the multivariate setting based on an adaptive knot selection for B-splines with an application to a chemical system used in geoscience (2023), arXiv:2306.00686.
+
+[2] Tibshirani, R. J. and J. Taylor (2011). The solution path of the generalized lasso. The Annals of Statistics 39(3), 1335 – 1371.

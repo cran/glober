@@ -1,0 +1,5 @@
+export("glober.1d", "glober.2d")
+import(genlasso, fda, ggplot2, plot3D, parallel)
+importFrom(genlasso,genlasso)
+importFrom("Matrix", "Diagonal", "bandSparse")
+importFrom("stats", "coef", "lm", "median", "predict", "terms")
